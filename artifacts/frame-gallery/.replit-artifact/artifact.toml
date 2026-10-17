@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Frame — Photo Gallery"
+description = "A responsive photography gallery for browsing, searching, uploading, and managing images locally in the browser."
+version = "1.0.0"
+id = "artifacts/frame-gallery"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21097
+
+[services.development]
+run = "pnpm --filter @workspace/frame-gallery run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/frame-gallery", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/frame-gallery/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21097"
+BASE_PATH = "/"
