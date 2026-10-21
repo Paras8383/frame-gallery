@@ -1,115 +1,121 @@
-const seedPhotos = [
-  {
-    id: 'photo-01',
-    title: 'Quiet passage',
-    category: 'Architecture',
-    date: 'May 18, 2024',
-    description: 'A sunlit corridor in the old quarter, found on an unhurried morning walk.',
-    src: 'https://images.unsplash.com/photo-1511818966892-d7d671e672a2?auto=format&fit=crop&w=1400&q=85',
-  },
-  {
-    id: 'photo-02',
-    title: 'Between the pines',
-    category: 'Nature',
-    date: 'October 02, 2023',
-    description: 'Late afternoon light settling over a quiet stretch of forest.',
-    src: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1400&q=85',
-  },
-  {
-    id: 'photo-03',
-    title: 'A room of her own',
-    category: 'Portraits',
-    date: 'March 11, 2024',
-    description: 'A soft, candid portrait made in the last light of the day.',
-    src: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=1400&q=85',
-  },
-  {
-    id: 'photo-04',
-    title: 'The long way home',
-    category: 'Travel',
-    date: 'September 09, 2023',
-    description: 'The road winding through the high desert, somewhere beyond the last town.',
-    src: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1400&q=85',
-  },
-  {
-    id: 'photo-05',
-    title: 'Still water, morning',
-    category: 'Nature',
-    date: 'June 24, 2024',
-    description: 'The lake held the first color of the morning for just a few minutes.',
-    src: 'https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1400&q=85',
-  },
-  {
-    id: 'photo-06',
-    title: 'Lines in the light',
-    category: 'Architecture',
-    date: 'February 16, 2024',
-    description: 'Geometry and shadow along a limestone facade in the city.',
-    src: 'https://images.unsplash.com/photo-1487958449943-2429e8be8625?auto=format&fit=crop&w=1400&q=85',
-  },
-  {
-    id: 'photo-07',
-    title: 'Salt air',
-    category: 'Travel',
-    date: 'July 30, 2023',
-    description: 'A small village facing the sea, where the afternoon seemed to slow down.',
-    src: 'https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=1400&q=85',
-  },
-  {
-    id: 'photo-08',
-    title: 'The in-between',
-    category: 'Portraits',
-    date: 'April 06, 2024',
-    description: 'A quiet moment before the conversation began.',
-    src: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=1400&q=85',
-  },
-  {
-    id: 'photo-09',
-    title: 'Open country',
-    category: 'Nature',
-    date: 'August 12, 2023',
-    description: 'The last warm hours on a high-country trail.',
-    src: 'https://images.unsplash.com/photo-1472396961693-142e6e269027?auto=format&fit=crop&w=1400&q=85',
-  },
-];
+const API_BASE = "https://rumg7kt54b.execute-api.us-east-1.amazonaws.com";
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
-let photos = [...seedPhotos];
-const objectUrls = new Set();
+async function apiRequest(path, options = {}) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+    },
+  });
 
-const pause = (duration = 280) => new Promise((resolve) => window.setTimeout(resolve, duration));
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      data.error || data.message || `Request failed: ${response.status}`,
+    );
+  }
+
+  return data;
+}
+
+function toPhoto(image) {
+  return {
+    id: image.imageId,
+    title: image.title || "Untitled photograph",
+    category: image.category || "Nature",
+    date: image.uploadedAt
+      ? new Intl.DateTimeFormat("en", {
+          month: "long",
+          day: "2-digit",
+          year: "numeric",
+        }).format(new Date(image.uploadedAt))
+      : "Recently added",
+    description: "A photograph in your personal collection.",
+    src: image.viewUrl,
+    key: image.s3Key,
+  };
+}
 
 export const galleryService = {
   async list() {
-    await pause();
-    return photos.map((photo) => ({ ...photo }));
+    const data = await apiRequest("/images");
+
+    console.log("AWS images response:", data);
+    console.log("First AWS image:", data.images?.[0]);
+
+    const photos = (data.images || []).map(toPhoto);
+
+    console.log("Mapped gallery photos:", photos);
+
+    return photos;
   },
 
-  async add({ file, title, category, src }) {
-    await pause(180);
-    const objectUrl = src || URL.createObjectURL(file);
-    if (objectUrl.startsWith('blob:')) objectUrls.add(objectUrl);
-    const created = {
-      id: `local-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
-      title: title.trim(),
-      category,
-      date: new Intl.DateTimeFormat('en', { month: 'long', day: '2-digit', year: 'numeric' }).format(new Date()),
-      description: 'A photograph recently added to the collection.',
-      src: objectUrl,
-      isLocal: true,
-    };
-    photos = [created, ...photos];
-    return { ...created };
+  async add({ file, title, category }) {
+    if (!file) throw new Error("Choose an image first.");
+    if (file.size > MAX_FILE_SIZE) {
+      throw new Error("Images must be 5 MB or smaller.");
+    }
+
+    // 1. Request a presigned S3 upload URL.
+    const upload = await apiRequest("/upload-url", {
+      method: "POST",
+      body: JSON.stringify({
+        contentType: file.type,
+        fileSize: file.size,
+      }),
+    });
+
+    if (!upload.uploadUrl || !upload.key) {
+      throw new Error("The upload API did not return an upload URL and key.");
+    }
+
+    // 2. Upload the image directly to S3.
+    const s3Response = await fetch(upload.uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+
+    if (!s3Response.ok) {
+      throw new Error(`S3 upload failed: ${s3Response.status}`);
+    }
+
+    // 3. Register its metadata in DynamoDB through Lambda.
+    const result = await apiRequest("/images", {
+      method: "POST",
+      body: JSON.stringify({
+        key: upload.key,
+        title: title.trim(),
+        category,
+      }),
+    });
+
+    // Fetch a fresh list so the returned photograph has a view URL.
+    const images = await this.list();
+    const created = images.find((image) => image.id === result.image?.imageId);
+
+    if (!created) {
+      throw new Error(
+        "The image was uploaded and registered, but it could not be loaded into the gallery. Refresh the gallery.",
+      );
+    }
+
+    return created;
+  },
+
+  async update(id, { title, category }) {
+    return apiRequest(`/images/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify({ title, category }),
+    });
   },
 
   async remove(id) {
-    await pause(120);
-    const target = photos.find((photo) => photo.id === id);
-    if (!target) throw new Error('This photograph is no longer in the collection.');
-    photos = photos.filter((photo) => photo.id !== id);
-    if (objectUrls.has(target.src)) {
-      URL.revokeObjectURL(target.src);
-      objectUrls.delete(target.src);
-    }
-    return id;
+    return apiRequest(`/images/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
   },
 };

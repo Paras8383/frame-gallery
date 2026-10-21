@@ -1,0 +1,66 @@
+## Task: Integrate Amazon Cognito Authentication into Frame
+
+I have an existing React + Vite image gallery called Frame. The app already works with AWS Lambda, API Gateway, S3, and DynamoDB. It supports uploading, viewing, editing, deleting, and refreshing photographs.
+
+I want to add multi-user authentication using the Amazon Cognito User Pool that I have already created.
+
+### Existing Cognito configuration
+
+- AWS Region: `us-east-1`
+- User Pool ID: `us-east-1_KCYSVpG6q`
+- App Client ID: `6v3pfeu0h6o1opu7cddfkk7nod`
+- Cognito domain: `https://us-east-1kcysvpg6q.auth.us-east-1.amazoncognito.com`
+- Authentication libraries installed: `oidc-client-ts` and `react-oidc-context`
+- Authentication configuration file: `src/authConfig.ts`
+- React entry point: `src/main.jsx`, already wrapped with `AuthProvider`
+
+### Important project constraints
+
+1. Inspect the existing project structure and code before making changes. Do not assume filenames, component structure, or existing authentication configuration without checking.
+2. Preserve the current gallery design, styling, and all existing functionality. Do not rewrite the entire app or replace existing components unnecessarily.
+3. Make changes incrementally and keep the existing working gallery recoverable through Git.
+4. Do not modify the separate URL shortener or unrelated projects.
+5. Do not expose AWS credentials, client secrets, or other sensitive values.
+6. Do not install duplicate dependencies if the required packages are already installed.
+7. Use the existing Cognito configuration where appropriate, and verify that the OIDC settings match Cognito's supported endpoints and the configured app client.
+8. Do not assume the current Replit preview URL is permanent. Identify the current origin and explain which exact callback and sign-out URLs must be configured in Cognito.
+
+### Phase 1: Frontend authentication
+
+- Add a clean sign-in screen that matches Frame's existing visual design.
+- Support Cognito-managed sign-in, sign-up, email verification, sign-out, and authentication callback handling as supported by the configured Cognito app client.
+- Show appropriate loading and error states.
+- Display the existing gallery only after a user is authenticated.
+- Add a logout control that works correctly.
+- Preserve all gallery functionality and existing components.
+- Do not attach an API Gateway authorizer or change backend authorization yet.
+- Do not falsely claim that the gallery is secure for multiple users at this phase.
+
+### Phase 2: Validate the frontend
+
+- Run the existing build and type checks, if configured.
+- Fix errors caused by the changes.
+- Verify the app loads when signed out and handles the Cognito callback correctly.
+- Identify any required AWS console settings that must be completed manually.
+- Do not claim login works until it has actually been tested.
+
+### Phase 3: Prepare backend isolation, but do not implement it yet
+
+Explain the changes needed to secure the backend for multiple users:
+- API Gateway JWT authorizer using the Cognito User Pool.
+- Derive user identity from the verified token, never from a client-supplied `userId`.
+- Store an owner identifier on each image record.
+- Enforce ownership for listing, viewing, editing, and deleting images.
+- Prevent users from generating presigned URLs for images they do not own.
+
+Do not implement Phase 3 until Phase 1 is working and I explicitly approve proceeding.
+
+### Deliverables
+
+1. A working frontend authentication integration that preserves the gallery.
+2. A concise list of files changed and why.
+3. Build/test results, including any remaining errors.
+4. Exact manual Cognito configuration steps still required.
+5. A clear distinction between frontend authentication and actual backend security.
+
+Start by inspecting the existing files. Then implement Phase 1 only.
