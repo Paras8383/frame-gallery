@@ -43,12 +43,7 @@ export const galleryService = {
   async list() {
     const data = await apiRequest("/images");
 
-    console.log("AWS images response:", data);
-    console.log("First AWS image:", data.images?.[0]);
-
     const photos = (data.images || []).map(toPhoto);
-
-    console.log("Mapped gallery photos:", photos);
 
     return photos;
   },

@@ -14,23 +14,24 @@ A responsive, browser-only photography gallery for collecting, browsing, searchi
 
 - React, Vite, and JavaScript JSX in the Frame artifact
 - pnpm workspace; app preview is served from the root path
-- Gallery sample data and CRUD operations live in `src/services/galleryService.js`
-- No backend or persistent storage; uploaded images use browser object URLs
+- Gallery API operations live in `src/services/galleryService.js`
+- Image metadata and upload/delete operations use the existing AWS API Gateway service
 
 ## Where things live
 
 - `artifacts/frame-gallery/src/App.jsx` — gallery interface and interactions
-- `artifacts/frame-gallery/src/services/galleryService.js` — replaceable local mock data layer
+- `artifacts/frame-gallery/src/authConfig.ts` — Cognito OIDC settings and hosted sign-out URL
+- `artifacts/frame-gallery/src/services/galleryService.js` — AWS API Gateway adapter
 - `artifacts/frame-gallery/src/index.css` — gallery styling and responsive layout
 
 ## Architecture decisions
 
-- The first version stores gallery operations in a browser-only service so a future AWS-backed service can replace it without moving data logic into UI components.
-- Image previews use temporary object URLs; they are not durable storage.
+- Cognito authorization-code sign-in gates the gallery interface, but the existing AWS API is not yet authenticated or owner-isolated.
+- Gallery operations continue through the existing API Gateway service; Phase 1 does not modify backend authorization.
 
 ## Product
 
-Frame provides a searchable, filterable personal image gallery with local upload previews, image details, and confirmed deletion.
+Frame provides a searchable, filterable image gallery with AWS-backed uploads, image details, editing, deletion, refresh, and Cognito-managed sign-in.
 
 ## User preferences
 
@@ -38,7 +39,7 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-- The gallery is intentionally local-only: reloading restores the sample set, not uploaded image files.
+- Cognito callback and sign-out URLs must exactly match the app origin and be allowlisted in the user-pool app client. Cognito login does not by itself secure or isolate gallery records.
 
 ## Pointers
 

@@ -12,8 +12,12 @@ import {
   X,
   RefreshCw,
   Pencil,
+  LogOut,
 } from "lucide-react";
 import { galleryService } from "./services/galleryService";
+import { useAuth } from "react-oidc-context";
+import AuthScreen from "./components/AuthScreen";
+import { buildCognitoLogoutUrl } from "./authConfig";
 
 const categories = [
   "All photographs",
@@ -551,7 +555,7 @@ function Lightbox({ photo, onClose, onDelete, onEdit }) {
   );
 }
 
-function App() {
+function GalleryApp({ auth }) {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -564,6 +568,7 @@ function App() {
   const [messages, setMessages] = useState([]);
   const toastTimers = useRef(new Map());
   const [editingPhoto, setEditingPhoto] = useState(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   const toast = useCallback((text, type = "success") => {
     const id = `${Date.now()}-${Math.random()}`;
@@ -574,6 +579,17 @@ function App() {
     }, 3600);
     toastTimers.current.set(id, timer);
   }, []);
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await auth.removeUser();
+      window.location.assign(buildCognitoLogoutUrl());
+    } catch {
+      setSigningOut(false);
+      toast("We couldn’t sign you out. Please try again.", "error");
+    }
+  };
 
   const loadPhotos = useCallback(async () => {
     setLoading(true);
@@ -673,6 +689,22 @@ function App() {
           >
             Collection
           </a>
+          <div className="auth-controls">
+            <span className="auth-email" title={auth.user?.profile?.email || "Signed in"}>
+              {auth.user?.profile?.email || "Signed in"}
+            </span>
+            <button
+              className="signout-button"
+              type="button"
+              onClick={handleSignOut}
+              disabled={signingOut}
+              aria-label="Sign out of Frame"
+              data-testid="sign-out"
+            >
+              <LogOut size={14} aria-hidden="true" />
+              <span>{signingOut ? "Signing out…" : "Sign out"}</span>
+            </button>
+          </div>
           <button
             className="upload-button"
             type="button"
@@ -685,6 +717,10 @@ function App() {
         </nav>
       </header>
       <main className="main-content" id="collection">
+        <aside className="gallery-auth-notice" role="note" data-testid="auth-security-boundary">
+          <strong>Sign-in only gates this interface.</strong>
+          <span>The AWS gallery API is not yet authenticated or isolated by account.</span>
+        </aside>
         <section className="intro">
           <div>
             <p className="eyebrow">A personal collection</p>
@@ -867,6 +903,37 @@ function App() {
       <Toasts messages={messages} />
     </div>
   );
+}
+
+function App() {
+  const auth = useAuth();
+  const [actionError, setActionError] = useState("");
+
+  const handleSignIn = async () => {
+    setActionError("");
+    try {
+      await auth.signinRedirect();
+    } catch (error) {
+      setActionError(error);
+    }
+  };
+
+  if (auth.isLoading) {
+    return <AuthScreen isLoading />;
+  }
+
+  if (!auth.isAuthenticated) {
+    return (
+      <AuthScreen
+        isRedirecting={auth.activeNavigator === "signinRedirect"}
+        authError={auth.error}
+        actionError={actionError}
+        onSignIn={handleSignIn}
+      />
+    );
+  }
+
+  return <GalleryApp auth={auth} />;
 }
 
 export default App;
