@@ -909,6 +909,33 @@ function App() {
   const auth = useAuth();
   const [actionError, setActionError] = useState("");
 
+  useEffect(() => {
+    if (auth.isLoading || auth.error?.source !== "signinCallback") return;
+
+    const url = new URL(window.location.href);
+    const hasProcessedCallback =
+      url.searchParams.has("state") &&
+      (url.searchParams.has("code") || url.searchParams.has("error"));
+    if (!hasProcessedCallback) return;
+
+    // The provider has already processed this failed callback. Remove its
+    // consumed state from the URL so a refresh doesn't process it a second time.
+    [
+      "code",
+      "state",
+      "session_state",
+      "iss",
+      "error",
+      "error_description",
+      "error_uri",
+    ].forEach((parameter) => url.searchParams.delete(parameter));
+    window.history.replaceState(
+      {},
+      document.title,
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+  }, [auth.error, auth.isLoading]);
+
   const handleSignIn = async () => {
     setActionError("");
     try {
