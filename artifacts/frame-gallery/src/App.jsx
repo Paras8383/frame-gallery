@@ -14,7 +14,10 @@ import {
   Pencil,
   LogOut,
 } from "lucide-react";
-import { galleryService } from "./services/galleryService";
+import {
+  GalleryAuthenticationError,
+  galleryService,
+} from "./services/galleryService";
 import { useAuth } from "react-oidc-context";
 import AuthScreen from "./components/AuthScreen";
 import { buildCognitoLogoutUrl } from "./authConfig";
@@ -555,7 +558,8 @@ function Lightbox({ photo, onClose, onDelete, onEdit }) {
   );
 }
 
-function GalleryApp({ auth }) {
+function GalleryApp({ auth, onAuthenticationFailure }) {
+  const accessToken = auth.user?.access_token;
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -591,17 +595,28 @@ function GalleryApp({ auth }) {
     }
   };
 
+  const handleRequestError = useCallback(
+    async (error) => {
+      if (!(error instanceof GalleryAuthenticationError)) return false;
+      await onAuthenticationFailure(error.message);
+      return true;
+    },
+    [onAuthenticationFailure],
+  );
+
   const loadPhotos = useCallback(async () => {
+    setPhotos([]);
     setLoading(true);
     setLoadError("");
     try {
-      setPhotos(await galleryService.list());
-    } catch {
+      setPhotos(await galleryService.list(accessToken));
+    } catch (error) {
+      if (await handleRequestError(error)) return;
       setLoadError("Your collection could not be loaded right now.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [accessToken, handleRequestError]);
 
   useEffect(() => {
     loadPhotos();
@@ -612,7 +627,16 @@ function GalleryApp({ auth }) {
   const savePhotoDetails = async ({ title, category }) => {
     if (!editingPhoto) return;
 
-    await galleryService.update(editingPhoto.id, { title, category });
+    try {
+      await galleryService.update(
+        editingPhoto.id,
+        { title, category },
+        accessToken,
+      );
+    } catch (error) {
+      if (await handleRequestError(error)) return;
+      throw error;
+    }
 
     setPhotos((current) =>
       current.map((photo) =>
@@ -639,7 +663,13 @@ function GalleryApp({ auth }) {
   );
 
   const addPhoto = async (details) => {
-    const created = await galleryService.add(details);
+    let created;
+    try {
+      created = await galleryService.add(details, accessToken);
+    } catch (error) {
+      if (await handleRequestError(error)) return;
+      throw error;
+    }
     setPhotos((current) => [created, ...current]);
     toast(`“${created.title}” is now in your collection.`);
   };
@@ -648,7 +678,7 @@ function GalleryApp({ auth }) {
     if (!pendingDelete) return;
     setDeleting(true);
     try {
-      await galleryService.remove(pendingDelete.id);
+      await galleryService.remove(pendingDelete.id, accessToken);
       setPhotos((current) =>
         current.filter((photo) => photo.id !== pendingDelete.id),
       );
@@ -656,6 +686,7 @@ function GalleryApp({ auth }) {
       toast(`“${pendingDelete.title}” was removed from your collection.`);
       setPendingDelete(null);
     } catch (error) {
+      if (await handleRequestError(error)) return;
       toast(error.message || "The photograph could not be removed.", "error");
     } finally {
       setDeleting(false);
@@ -909,6 +940,20 @@ function App() {
   const auth = useAuth();
   const [actionError, setActionError] = useState("");
 
+  const handleAuthenticationFailure = useCallback(
+    async (message) => {
+      setActionError(message);
+      try {
+        await auth.removeUser();
+      } catch {
+        setActionError(
+          "Your session has expired. Please sign in again to continue.",
+        );
+      }
+    },
+    [auth.removeUser],
+  );
+
   useEffect(() => {
     if (auth.isLoading || auth.error?.source !== "signinCallback") return;
 
@@ -960,7 +1005,12 @@ function App() {
     );
   }
 
-  return <GalleryApp auth={auth} />;
+  return (
+    <GalleryApp
+      auth={auth}
+      onAuthenticationFailure={handleAuthenticationFailure}
+    />
+  );
 }
 
 export default App;
